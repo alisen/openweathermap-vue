@@ -1,0 +1,30 @@
+{
+    "version": "2.0.0",
+    "tasks": [{
+            "label": "build",
+            "command": "dotnet",
+            "type": "process",
+            "args": [
+                "build",
+                "${workspaceFolder}/WeatherAPI/WeatherAPI.csproj"
+            ],
+            "problemMatcher": "$msCompile"
+        },
+        {
+            "label": "Web Api",
+            "type": "shell",
+            "group": "build",
+            "command": "cd ${workspaceFolder}/WeatherAPI; dotnet run;",
+            "problemMatcher": []
+        },
+        {
+            "label": "Vue",
+            "type": "shell",
+            "group": "build",
+            "command": "cd ${workspaceFolder}/frontend; yarn run serve;",
+            "problemMatcher": [
+                "$eslint-compact"
+            ]
+        }
+    ]
+}
