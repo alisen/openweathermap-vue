@@ -1,47 +1,36 @@
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
+using System.Net;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.HttpsPolicy;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Versioning;
+using Microsoft.AspNetCore.Rewrite;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
-using NSwag.AspNetCore;
+using Newtonsoft.Json;
 using WeatherAPI.Filters;
 using WeatherAPI.Models;
 using WeatherAPI.OpenWeatherMap;
 
 namespace WeatherAPI {
     public class Startup {
+        private IConfiguration Configuration { get; }
+        private IHostingEnvironment Environment { get; }
+        private ILoggerFactory LoggerFactory { get; }
+
         public Startup (IConfiguration configuration, IHostingEnvironment environment, ILoggerFactory loggerFactory) {
-            this.Configuration = configuration;
-            this.Environment = environment;
-            this.LoggerFactory = loggerFactory;
-
-        }
-        public IConfiguration Configuration { get; }
-        public IHostingEnvironment Environment { get; }
-        public ILoggerFactory LoggerFactory { get; }
-
-        public Startup (IHostingEnvironment env, IConfiguration configuration, ILoggerFactory loggerFactory) {
             Configuration = configuration;
-            Environment = env;
+            Environment = environment;
             LoggerFactory = loggerFactory;
         }
 
         // This method gets called by the runtime. Use this method to add services to the container.
         public void ConfigureServices (IServiceCollection services) {
-
-            var logger = LoggerFactory.CreateLogger<Startup> ();
-
             services.AddMvc (options => {
                 options.Filters.Add<JsonExceptionFilter> ();
-                options.Filters.Add<RequireHttpsOrCloseAttribute> ();
             }).SetCompatibilityVersion (CompatibilityVersion.Version_2_2);
 
             services.AddRouting (options => options.LowercaseUrls = true);
@@ -80,17 +69,10 @@ namespace WeatherAPI {
                 };
             });
 
-            string OpenWeatherMapApiKey = "";
-            if (Environment.IsDevelopment ()) {
-                logger.LogDebug ("OpenWeatherMapApiKey=" + Configuration["OpenWeatherMapApiKey"]);
-                OpenWeatherMapApiKey = Configuration["OpenWeatherMapApiKey"];
-            } else if (Environment.IsProduction ()) {
-                OpenWeatherMapApiKey = System.Environment.GetEnvironmentVariable ("OpenWeatherMapApiKey");
-            } else {
-                logger.LogError ("fail to get credentials!");
-            }
+            // Register IConfiguration with DI system to support IConfiguration.GetValue approach
+            services.AddSingleton (Configuration);
 
-            services.AddSingleton<OpenWeatherMapApiHandler> (new OpenWeatherMapApiHandler (OpenWeatherMapApiKey));
+            services.AddHttpClient<OpenWeatherMapApiHandler> ();
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
@@ -104,11 +86,22 @@ namespace WeatherAPI {
 
             app.UseCors ("WeatherApp");
 
-            // Add OpenAPI/Swagger middlewares
+            // Add OpenAPI/Swagger middleware
             app.UseSwagger (); // Serves the registered OpenAPI/Swagger documents by default on `/swagger/{documentName}/swagger.json`
             app.UseSwaggerUi3 (); // Serves the Swagger UI 3 web ui to view the OpenAPI/Swagger documents by default on `/swagger`
 
+            app.UseStatusCodePages (async context => {
+                context.HttpContext.Response.ContentType = "application/json";
+                await context.HttpContext.Response.WriteAsync (
+                    JsonConvert.SerializeObject (new {
+                        context.HttpContext.Response.StatusCode
+                    }));
+            });
+
             app.UseMvc ();
+            var option = new RewriteOptions ();
+            option.AddRedirect ("^$", "swagger");
+            app.UseRewriter (option);
         }
     }
 }

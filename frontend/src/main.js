@@ -1,28 +1,29 @@
 import Vue from 'vue'
+import store from './store'
 import App from './App.vue'
 import router from './router'
 import Vuetify from 'vuetify'
-import Vuex from 'vuex'
+import VuetifyToast from 'vuetify-toast-snackbar'
 
 Vue.config.productionTip = false
 
-Vue.use(Vuex);
 Vue.use(Vuetify);
-Vue.use(require('vue-moment'));
+Vue.use(VuetifyToast, {
+  x: 'top',
+  y: 'bottom',
+  color: 'info',
+  icon: 'info',
+  timeout: 3000,
+  dismissable: true,
+  autoHeight: true,
+  multiLine: true,
+  vertical: false,
+  property: '$toast'
+});
 
-const store = new Vuex.Store({
-  state: {
-    searchedCities: [],
-  },
-  getters: {
-    getCities: state => {
-      return state.searchedCities
-    }
-  },
-})
-
-new Vue({
-  render: h => h(App),
+window.store = store
+window.app = new Vue({
   store,
-  router
+  router,
+  render: h => h(App)
 }).$mount('#app')

@@ -1,7 +1,7 @@
 using System;
 using Newtonsoft.Json;
 
-namespace WeatherAPI {
+namespace WeatherAPI.Helpers {
     internal class UnixDateTimeConverter : JsonConverter {
         public override bool CanConvert (Type objectType) {
             return objectType == typeof (DateTime);

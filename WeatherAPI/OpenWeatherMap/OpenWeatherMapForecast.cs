@@ -2,9 +2,10 @@ using System;
 using System.Globalization;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
+using UnixDateTimeConverter = WeatherAPI.Helpers.UnixDateTimeConverter;
 
-namespace Forecast {
-    public class OpenWeatherMapForcast {
+namespace WeatherAPI.OpenWeatherMap {
+    public class OpenWeatherMapForecast {
         [JsonProperty ("cod")]
         [JsonConverter (typeof (ParseStringConverter))]
         public long Cod { get; set; }
@@ -22,7 +23,7 @@ namespace Forecast {
         public City City { get; set; }
     }
 
-    public partial class City {
+    public class City {
         [JsonProperty ("id")]
         public long Id { get; set; }
 
@@ -36,7 +37,7 @@ namespace Forecast {
         public string Country { get; set; }
     }
 
-    public partial class Coord {
+    public class Coord {
         [JsonProperty ("lat")]
         public double Lat { get; set; }
 
@@ -44,7 +45,7 @@ namespace Forecast {
         public double Lon { get; set; }
     }
 
-    public partial class Forecast {
+    public class Forecast {
         [JsonProperty ("dt")]
         [JsonConverter (typeof (UnixDateTimeConverter))]
         public DateTime Dt { get; set; }
@@ -74,12 +75,12 @@ namespace Forecast {
         public DateTimeOffset DtTxt { get; set; }
     }
 
-    public partial class Clouds {
+    public class Clouds {
         [JsonProperty ("all")]
         public long All { get; set; }
     }
 
-    public partial class MainClass {
+    public class MainClass {
         [JsonProperty ("temp")]
         public double Temp { get; set; }
 
@@ -105,7 +106,7 @@ namespace Forecast {
         public long TempKf { get; set; }
     }
 
-    public partial class Rain {
+    public class Rain {
         [JsonProperty ("1h", NullValueHandling = NullValueHandling.Ignore)]
         public double? OneHour { get; set; }
 
@@ -116,7 +117,7 @@ namespace Forecast {
         public double? ThreeHour { get; set; }
     }
 
-    public partial class Snow {
+    public class Snow {
         [JsonProperty ("1h", NullValueHandling = NullValueHandling.Ignore)]
         public double? OneHour { get; set; }
 
@@ -127,12 +128,12 @@ namespace Forecast {
         public double? ThreeHour { get; set; }
     }
 
-    public partial class Sys {
+    public class Sys {
         [JsonProperty ("pod")]
         public string Pod { get; set; }
     }
 
-    public partial class Weather {
+    public class Weather {
         [JsonProperty ("id")]
         public long Id { get; set; }
 
@@ -146,7 +147,7 @@ namespace Forecast {
         public string Icon { get; set; }
     }
 
-    public partial class Wind {
+    public class Wind {
         [JsonProperty ("speed")]
         public double Speed { get; set; }
 
@@ -154,7 +155,7 @@ namespace Forecast {
         public double Deg { get; set; }
     }
 
-    public partial class OpenWeatherMapForecastResponse {
+    public class OpenWeatherMapForecastResponse {
         public static OpenWeatherMapForecastResponse FromJson (string json) => JsonConvert.DeserializeObject<OpenWeatherMapForecastResponse> (json, Converter.Settings);
     }
 
@@ -178,8 +179,7 @@ namespace Forecast {
         public override object ReadJson (JsonReader reader, Type t, object existingValue, JsonSerializer serializer) {
             if (reader.TokenType == JsonToken.Null) return null;
             var value = serializer.Deserialize<string> (reader);
-            long l;
-            if (Int64.TryParse (value, out l)) {
+            if (Int64.TryParse (value, out var l)) {
                 return l;
             }
             throw new Exception ("Cannot unmarshal type long");
@@ -192,7 +192,6 @@ namespace Forecast {
             }
             var value = (long) untypedValue;
             serializer.Serialize (writer, value.ToString ());
-            return;
         }
 
         public static readonly ParseStringConverter Singleton = new ParseStringConverter ();

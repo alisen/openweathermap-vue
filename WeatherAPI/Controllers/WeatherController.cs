@@ -1,89 +1,84 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
+using System.Threading.Tasks;
+using ComparerExtensions;
 using Microsoft.AspNetCore.Mvc;
+using WeatherAPI.Models;
 using WeatherAPI.OpenWeatherMap;
 
 namespace WeatherAPI.Controllers {
-    [Route ("api/")]
+    [ApiController]
+    [Route ("api/forecast/[action]")]
+    [ApiVersion ("1.1")]
     public class WeatherController : Controller {
-        private OpenWeatherMapApiHandler handler = null;
+        private readonly OpenWeatherMapApiHandler _handler;
 
         public WeatherController (OpenWeatherMapApiHandler openWeatherMapApiHandler) {
-            handler = openWeatherMapApiHandler;
+            _handler = openWeatherMapApiHandler;
         }
 
-        [Route ("forecast/city/{city}"), ActionName ("GetForecastByCity"), HttpGet]
-        public Frontend.ForecastData GetForecastByCity (string city) {
-            Frontend.ForecastData data = new Frontend.ForecastData ();
+        [Route ("{city}"), ActionName ("city"), HttpGet]
+        public async Task<ForecastResponse> GetForecastByCity (string city) {
+            var data = new ForecastResponse ();
             if (string.IsNullOrEmpty (city)) {
-                data.Code = Frontend.ReturnCode.ERROR;
+                data.StatusMessage = "City Name not provided.";
+                data.StatusCode = 400;
                 return data;
             }
-            var resp = handler.GetForcastByCity (city);
-            if (resp == null) {
-                data.Code = Frontend.ReturnCode.ERROR;
-                return data;
-            }
-            data.City = resp.City.Name;
-            data.Country = resp.City.Country;
-
-            var list = new LinkedList<Frontend.ForecastData.Data> ();
-
-            int lastDay = -1;
-            foreach (var forecast in resp.Forecasts) {
-                if (forecast.Dt.Day != lastDay) {
-                    Frontend.ForecastData.Data d = new Frontend.ForecastData.Data ();
-                    d.Temperature = forecast.Main.Temp;
-                    d.WindSpeed = forecast.Wind.Speed;
-                    d.Humidity = forecast.Main.Humidity;
-                    d.Weather = forecast.Weather[0].Main;
-                    d.WeatherIcon = forecast.Weather[0].Icon;
-                    d.Date = forecast.Dt.Date.ToString ();
-                    list.AddLast (d);
-                    lastDay = forecast.Dt.Day;
-                }
-            }
-            data.Forecasts = list.ToArray ();
-            data.Code = Frontend.ReturnCode.SUCCESS;
-
-            return data;
+            var response = await _handler.GetForecastByCityAsync (city.Trim ());
+            return ForecastResponse (data, response);
         }
 
-        [Route ("forecast/zip/{zipCode}"), ActionName ("GetForecastByZipCode"), HttpGet]
-        public Frontend.ForecastData GetForecastByZipCode (string zipCode) {
-            Frontend.ForecastData data = new Frontend.ForecastData ();
-            int id;
-            if (!int.TryParse (zipCode, out id)) {
-                data.Code = Frontend.ReturnCode.ERROR;
+        [Route ("{zipCode}"), ActionName ("zip"), HttpGet]
+        public async Task<ForecastResponse> GetForecastByZipCode (string zipCode) {
+            var data = new ForecastResponse ();
+            if (!int.TryParse (zipCode, out _)) {
+                data.StatusMessage = "Zip Code not provided.";
+                data.StatusCode = 400;
                 return data;
             }
-            var resp = handler.GetForcastByZip (zipCode);
-            if (resp == null) {
-                data.Code = Frontend.ReturnCode.ERROR;
+            var response = await _handler.GetForecastByZipAsync (zipCode.Trim ());
+            return ForecastResponse (data, response);
+        }
+
+        private static ForecastResponse ForecastResponse (ForecastResponse data, OpenWeatherMapResponse response) {
+            if (response.StatusCode >= 200 && response.StatusCode < 300) {
+                data.City = response.OpenWeatherMapForecast.City.Name;
+                data.Country = response.OpenWeatherMapForecast.City.Country;
+
+                IEqualityComparer<ForecastResponse.Data> comparer = KeyEqualityComparer<ForecastResponse.Data>.Using (date => date.Date);
+
+                data.Forecasts = response.OpenWeatherMapForecast.Forecasts
+                    .GroupBy (g => new ForecastResponse.Data {
+                        Temperature = g.Main.Temp,
+                            WindSpeed = g.Wind.Speed,
+                            Humidity = g.Main.Humidity,
+                            Weather = g.Weather[0].Main,
+                            WeatherIcon = g.Weather[0].Icon,
+                            Date = g.Dt.ToLongDateString ()
+                    }, comparer)
+                    .Select (forecast =>
+                        new ForecastResponse.Data {
+                            Temperature = forecast.Key.Temperature,
+                                WindSpeed = forecast.Key.WindSpeed,
+                                Humidity = forecast.Key.Humidity,
+                                Weather = forecast.Key.Weather,
+                                WeatherIcon = forecast.Key.WeatherIcon,
+                                Date = forecast.Key.Date
+                        }
+                    )
+                    .ToArray ();
+
+                data.StatusCode = response.OpenWeatherMapForecast.Cod;
+                data.StatusMessage = "Success";
+
                 return data;
             }
-            data.City = resp.City.Name;
-            data.Country = resp.City.Country;
 
-            var list = new LinkedList<Frontend.ForecastData.Data> ();
-
-            int lastDay = -1;
-            foreach (var forecast in resp.Forecasts) {
-                if (forecast.Dt.Day != lastDay) {
-                    Frontend.ForecastData.Data d = new Frontend.ForecastData.Data ();
-                    d.Temperature = forecast.Main.Temp;
-                    d.WindSpeed = forecast.Wind.Speed;
-                    d.Humidity = forecast.Main.Humidity;
-                    d.Weather = forecast.Weather[0].Main;
-                    d.WeatherIcon = forecast.Weather[0].Icon;
-                    d.Date = forecast.Dt.Date.ToString ();
-                    list.AddLast (d);
-                    lastDay = forecast.Dt.Day;
-                }
-            }
-            data.Forecasts = list.ToArray ();
-            data.Code = Frontend.ReturnCode.SUCCESS;
-
+            data.StatusMessage = response.Message;
+            data.StatusCode = response.StatusCode;
             return data;
         }
     }

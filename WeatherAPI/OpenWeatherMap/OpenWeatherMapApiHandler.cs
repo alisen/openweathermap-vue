@@ -1,67 +1,79 @@
 ﻿using System;
-using System.IO;
-using System.Net;
-using System.Text;
-using Forecast;
-using Newtonsoft.Json;
+using System.Net.Http;
+using System.Threading.Tasks;
+using Microsoft.Extensions.Configuration;
 
 namespace WeatherAPI.OpenWeatherMap {
     public class OpenWeatherMapApiHandler {
-        private static string END_POINT = "http://api.openweathermap.org/data/2.5/";
+        private readonly HttpClient _httpClient;
+        private readonly IConfiguration _configuration;
+        private string _unit;
+        private string _apiKey;
+        private string _baseUrl;
 
-        private String Unit;
-        private readonly string API_KEY;
-
-        public OpenWeatherMapApiHandler (string key) {
-            Unit = "metric";
-            API_KEY = key;
+        public OpenWeatherMapApiHandler (HttpClient httpClient, IConfiguration configuration) {
+            _httpClient = httpClient;
+            _configuration = configuration;
         }
 
-        public OpenWeatherMapForcast GetForcastByZip (string zipCode) {
-            StringBuilder builder = new StringBuilder (END_POINT);
-            builder.Append ("forecast");
-            builder.AppendFormat ("?zip={0},de&appid={1}&units={2}", zipCode, API_KEY, Unit);
-            HttpWebRequest apiRequest = WebRequest.Create (builder.ToString ()) as HttpWebRequest;
+        public virtual async Task<OpenWeatherMapResponse> GetForecastByZipAsync (string zipCode) {
+            ParameterChecker ();
+            var endpointUrl = $"{_baseUrl}forecast?zip={zipCode},de&units={_unit}&appid={_apiKey}";
 
-            string apiResponse = "";
-            using (HttpWebResponse response = apiRequest.GetResponse () as HttpWebResponse) {
-                var reader = new StreamReader (response.GetResponseStream ());
-                apiResponse = reader.ReadToEnd ();
+            var response = await _httpClient.GetAsync (endpointUrl);
+
+            if (response.IsSuccessStatusCode) return await ForecastResponse (response);
+            var error = await response.Content.ReadAsAsync<OpenWeatherMapErrorResponse> ();
+            return new OpenWeatherMapResponse {
+                Message = error.Message,
+                    IsSuccessStatusCode = response.IsSuccessStatusCode,
+                    StatusCode = (int) response.StatusCode,
+                    OpenWeatherMapForecast = null
+            };
+        }
+
+        public virtual async Task<OpenWeatherMapResponse> GetForecastByCityAsync (string cityName) {
+            ParameterChecker ();
+            var endpointUrl = $"{_baseUrl}forecast?q={cityName}&units={_unit}&appid={_apiKey}";
+
+            var response = await _httpClient.GetAsync (endpointUrl);
+
+            if (response.IsSuccessStatusCode) return await ForecastResponse (response);
+            var error = await response.Content.ReadAsAsync<OpenWeatherMapErrorResponse> ();
+            return new OpenWeatherMapResponse {
+                Message = error.Message,
+                    IsSuccessStatusCode = response.IsSuccessStatusCode,
+                    StatusCode = (int) response.StatusCode,
+                    OpenWeatherMapForecast = null
+            };
+        }
+
+        private static async Task<OpenWeatherMapResponse> ForecastResponse (HttpResponseMessage response) {
+            var forecastResponse = await response.Content.ReadAsAsync<OpenWeatherMapForecast> ();
+            return new OpenWeatherMapResponse {
+                Message = forecastResponse.Message.ToString (),
+                    IsSuccessStatusCode = response.IsSuccessStatusCode,
+                    StatusCode = (int) response.StatusCode,
+                    OpenWeatherMapForecast = forecastResponse,
+            };
+        }
+
+        private void ParameterChecker () {
+            _unit = _configuration.GetValue<string> ("OpenWeatherMapUnit");
+            _apiKey = _configuration.GetValue<string> ("OpenWeatherMapApiKey");
+            _baseUrl = _configuration.GetValue<string> ("OpenWeatherMapBaseUrl");
+
+            if (string.IsNullOrWhiteSpace (_unit)) {
+                throw new ArgumentException ("There is no unit in the user secret store.");
             }
 
-            var settings = new JsonSerializerSettings {
-                NullValueHandling = NullValueHandling.Ignore,
-                MissingMemberHandling = MissingMemberHandling.Ignore
-            };
-            var jsonModel = JsonConvert.DeserializeObject<OpenWeatherMapForcast> (apiResponse, settings);
-            return jsonModel;
-        }
-
-        public OpenWeatherMapForcast GetForcastByCity (string cityName) {
-            StringBuilder builder = new StringBuilder (END_POINT);
-            builder.Append ("forecast");
-            builder.AppendFormat ("?q={0}&appid={1}&units={2}", cityName, API_KEY, Unit);
-            HttpWebRequest apiRequest = WebRequest.Create (builder.ToString ()) as HttpWebRequest;
-
-            string apiResponse = "";
-            using (HttpWebResponse response = apiRequest.GetResponse () as HttpWebResponse) {
-                var reader = new StreamReader (response.GetResponseStream ());
-                apiResponse = reader.ReadToEnd ();
+            if (string.IsNullOrWhiteSpace (_apiKey)) {
+                throw new ArgumentException ("There is no OpenWeatherMap API key in the user secret store.");
             }
 
-            var settings = new JsonSerializerSettings {
-                NullValueHandling = NullValueHandling.Ignore,
-                MissingMemberHandling = MissingMemberHandling.Ignore
-            };
-            var jsonModel = JsonConvert.DeserializeObject<OpenWeatherMapForcast> (apiResponse, settings);
-            return jsonModel;
-        }
-
-        private bool IsFloatOrInt (string value) {
-            int intValue;
-            float floatValue;
-            return Int32.TryParse (value, out intValue) ||
-                float.TryParse (value, out floatValue);
+            if (string.IsNullOrWhiteSpace (_baseUrl)) {
+                throw new ArgumentException ("There is no baseUrl in the user secret store.");
+            }
         }
     }
 }
