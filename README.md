@@ -1,4 +1,4 @@
-# Alisen's OpenWeatherMap Project
+# OpenWeatherMap Project
 
 ## Project setup
 ```
